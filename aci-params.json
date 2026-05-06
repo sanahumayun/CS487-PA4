@@ -1,0 +1,27 @@
+{
+  "location": "ukwest",
+  "identity": {
+    "type": "UserAssigned",
+    "userAssignedIdentities": {
+      "/subscriptions/67e93b84-fe08-452c-80ea-175d0a3eca56/resourcegroups/rg-sp26-26100273/providers/Microsoft.ManagedIdentity/userAssignedIdentities/mi-pa4-26100273": {}
+    }
+  },
+  "properties": {
+    "containers": [{
+      "name": "report",
+      "properties": {
+        "image": "pa426100273.azurecr.io/report-job:v1",
+        "resources": {"requests": {"cpu": 1.0, "memoryInGb": 1.5}},
+        "environmentVariables": [
+          {"name": "ORDER_ID", "value": "TEST-001"},
+          {"name": "ORDER_JSON", "value": "{\"order_id\":\"TEST-001\",\"items\":[{\"sku\":\"ABC\",\"qty\":2}]}"},
+          {"name": "STORAGE_ACCOUNT_URL", "value": "https://rgsp26261002738a9a.blob.core.windows.net"},
+          {"name": "AZURE_CLIENT_ID", "value": "e837bb03-1c0f-4125-a644-80771e9d7b90"}
+        ]
+      }
+    }],
+    "imageRegistryCredentials": [{"server": "pa426100273.azurecr.io", "username": "pa426100273", "password": "W0MIR5np5eabDU9pt8Lyj6bzcYeuzg90XOhYXtyGa0suWOHMIAROJQQJ99CEAClhwhEEqg7NAAACAZCRN5ug"}],
+    "osType": "Linux",
+    "restartPolicy": "Never"
+  }
+}
