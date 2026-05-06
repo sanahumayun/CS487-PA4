@@ -13,34 +13,18 @@ async def http_starter(req: func.HttpRequest, client: df.DurableOrchestrationCli
 
 @app.orchestration_trigger(context_name="context")
 def my_orchestrator(context: df.DurableOrchestrationContext):
-    # 1. Get the input order
     order = context.get_input()
-    
-    # 2. Call validate_activity with the order
     validation = yield context.call_activity("validate_activity", order)
-    
-    # 3. If invalid, return status: rejected
     if not validation.get("valid"):
         return {"status": "rejected", "reason": validation.get("reason", "unknown")}
-    
-    # 4. If valid, call report_activity with the order
     report_url = yield context.call_activity("report_activity", order)
-    
-    # 5. Return status: completed
     return {"status": "completed", "report_url": report_url}
 
 @app.activity_trigger(input_name="order")
 def validate_activity(order: dict) -> dict:
-    # 1. Get VALIDATE_URL from environment variables
     url = os.environ["VALIDATE_URL"]
-    
-    # 2. Make a POST request to VALIDATE_URL with the order as JSON
     r = requests.post(url, json=order)
-    
-    # 3. Raise an exception if the request fails
     r.raise_for_status()
-    
-    # 4. Return the parsed JSON response
     return r.json()
 
 @app.activity_trigger(input_name="order")
@@ -57,14 +41,15 @@ def report_activity(order: dict) -> str:
     rg       = os.environ["REPORT_RG"]
     loc      = os.environ["REPORT_LOCATION"]
     image    = os.environ["REPORT_IMAGE"]
+    storage_url = os.environ["STORAGE_ACCOUNT_URL"]
+    client_id   = os.environ["AZURE_CLIENT_ID"]
     order_id = order["order_id"]
     name     = f"ci-report-{order_id.lower()}"
 
     client = ContainerInstanceManagementClient(DefaultAzureCredential(), sub_id)
     
-    # Create the container group with required specs
     group = ContainerGroup(
-        location=loc, 
+        location=loc,
         os_type=OperatingSystemTypes.linux,
         restart_policy=ContainerGroupRestartPolicy.never,
         image_registry_credentials=[ImageRegistryCredential(
@@ -72,20 +57,19 @@ def report_activity(order: dict) -> str:
             username=os.environ["ACR_USERNAME"],
             password=os.environ["ACR_PASSWORD"])],
         containers=[Container(
-            name="report", 
+            name="report",
             image=image,
             resources=ResourceRequirements(
                 requests=ResourceRequests(cpu=1.0, memory_in_gb=1.5)),
             environment_variables=[
-                EnvironmentVariable(name="ORDER_ID",     value=order_id),
-                EnvironmentVariable(name="ORDER_JSON",   value=json.dumps(order)),
-                EnvironmentVariable(name="STORAGE_CONN", secure_value=os.environ["STORAGE_CONN"]),
+                EnvironmentVariable(name="ORDER_ID",            value=order_id),
+                EnvironmentVariable(name="ORDER_JSON",          value=json.dumps(order)),
+                EnvironmentVariable(name="STORAGE_ACCOUNT_URL", value=storage_url),
+                EnvironmentVariable(name="AZURE_CLIENT_ID",     value=client_id),
             ])])
     
-    # Create the ACI programmatically
     client.container_groups.begin_create_or_update(rg, name, group).result()
 
-    # Poll until Succeeded (or 5 min max)
     for _ in range(60):
         info = client.container_groups.get(rg, name)
         state = info.instance_view.state if info.instance_view else None
@@ -93,10 +77,7 @@ def report_activity(order: dict) -> str:
             break
         time.sleep(5)
 
-    # Clean up so it stops being a visible resource and stops billing
     client.container_groups.begin_delete(rg, name)
 
-    # Return the expected blob URL
-    # Note: Extracting account name from connection string for the URL
-    account = os.environ["STORAGE_CONN"].split(";AccountName=")[1].split(";")[0]
-    return f"https://{account}.blob.core.windows.net/reports/{order_id}.pdf"
+    account_name = storage_url.split("https://")[1].split(".")[0]
+    return f"https://{account_name}.blob.core.windows.net/reports/{order_id}.pdf"
