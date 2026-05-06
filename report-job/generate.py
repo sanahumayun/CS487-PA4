@@ -8,6 +8,8 @@ order      = json.loads(os.environ["ORDER_JSON"])
 account_url = os.environ["STORAGE_ACCOUNT_URL"]
 client_id   = os.environ["AZURE_CLIENT_ID"]
 
+print(f"Starting report generation for order {order_id}")
+
 # 1. Generate PDF locally
 pdf_path = f"/tmp/{order_id}.pdf"
 c = canvas.Canvas(pdf_path)
@@ -18,6 +20,9 @@ for i, item in enumerate(order["items"]):
     c.drawString(100, y, f"  {item['sku']}  x{item['qty']}")
     y -= 20
 c.save()
+
+print(f"PDF generated at {pdf_path}")
+print(f"Uploading to blob storage at {account_url}")
 
 # 2. Upload to blob using managed identity
 credential = ManagedIdentityCredential(client_id=client_id)
